@@ -339,7 +339,7 @@ body::before{
   box-shadow:0 30px 80px rgba(0,0,0,.8);
 }
 
-.lb-close,.lb-prev,.lb-next{
+.lb-prev,.lb-next{
   position:absolute;
   background:rgba(255,255,255,.04);
   border:1px solid var(--line);
@@ -351,13 +351,37 @@ body::before{
   font-family:"Bebas Neue",sans-serif;
   letter-spacing:.04em;
 }
-.lb-close:hover,.lb-prev:hover,.lb-next:hover{
+.lb-prev:hover,.lb-next:hover{
   background:var(--accent);color:var(--bg);
   border-color:var(--accent);
 }
-.lb-close{top:32px;right:32px}
 .lb-prev{left:32px;top:50%;transform:translateY(-50%)}
 .lb-next{right:32px;top:50%;transform:translateY(-50%)}
+
+/* Top toolbar — Download / Back */
+.lb-toolbar{
+  position:absolute;
+  top:28px;right:28px;
+  display:flex;gap:10px;
+  z-index:10;
+}
+.lb-action{
+  display:inline-flex;align-items:center;gap:9px;
+  height:44px;padding:0 20px;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  color:var(--accent);
+  cursor:pointer;transition:all .25s;
+  font-family:"Bebas Neue",sans-serif;
+  font-size:12px;letter-spacing:.28em;
+  text-transform:uppercase;
+  border-radius:3px;
+}
+.lb-action:hover{
+  background:var(--accent);color:var(--bg);
+  border-color:var(--accent);
+}
+.lb-action svg{flex-shrink:0;display:block}
 
 .lb-info{
   position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
@@ -401,7 +425,9 @@ body::before{
   .section-meta{text-align:left}
   .lb-prev{left:12px}
   .lb-next{right:12px}
-  .lb-close{top:16px;right:16px}
+  .lb-toolbar{top:14px;right:14px;gap:6px}
+  .lb-action{padding:0;width:42px;height:42px;justify-content:center}
+  .lb-action span{display:none}
 }
 </style>
 </head>
@@ -515,7 +541,16 @@ body::before{
 
 <!-- ═════════ LIGHTBOX ═════════ -->
 <div class="lightbox" id="lightbox" role="dialog" aria-label="Photo viewer">
-  <button class="lb-close" id="lbClose" aria-label="Close">×</button>
+  <div class="lb-toolbar">
+    <button class="lb-action" id="lbDownload" aria-label="Download photo" title="Download (D)">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
+      <span>Download</span>
+    </button>
+    <button class="lb-action" id="lbClose" aria-label="Back to gallery" title="Back (Esc)">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg>
+      <span>Back</span>
+    </button>
+  </div>
   <button class="lb-prev"  id="lbPrev"  aria-label="Previous">‹</button>
   <button class="lb-next"  id="lbNext"  aria-label="Next">›</button>
   <img class="lightbox-img" id="lbImg" alt="" />
@@ -557,6 +592,15 @@ function render(){
 }
 function next(){ cur = (cur+1) % photos.length; render(); }
 function prev(){ cur = (cur-1+photos.length) % photos.length; render(); }
+function download(){
+  const p = photos[cur];
+  const a = document.createElement('a');
+  a.href = p.src;
+  a.download = `SN2644_Naming_Ceremony_Plate_${p.num}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 document.querySelectorAll('.photo').forEach((el,i)=>{
   el.addEventListener('click', ()=>open(i));
@@ -564,12 +608,14 @@ document.querySelectorAll('.photo').forEach((el,i)=>{
 document.getElementById('lbClose').addEventListener('click', close);
 document.getElementById('lbNext').addEventListener('click', next);
 document.getElementById('lbPrev').addEventListener('click', prev);
+document.getElementById('lbDownload').addEventListener('click', download);
 lb.addEventListener('click', e=>{ if(e.target===lb) close(); });
 document.addEventListener('keydown', e=>{
   if(!lb.classList.contains('open')) return;
   if(e.key==='Escape') close();
   if(e.key==='ArrowRight') next();
   if(e.key==='ArrowLeft')  prev();
+  if(e.key==='d' || e.key==='D') download();
 });
 
 // Reveal on scroll
