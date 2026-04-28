@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Bebas+Neue&family=Barlow+Condensed:wght@200;300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{
   --bg:#06090f; --bg-2:#0a1020; --surface:#0c1220;
@@ -191,13 +190,13 @@ body.selecting .photo:hover{transform:none}
   <div class="gallery-tools reveal">
     <button class="tool-btn" id="btnSaveAll">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-      <span>Save All Photos</span>
+      <span>Save All to Photos</span>
     </button>
     <button class="tool-btn" id="btnSelect">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
       <span>Select Photos</span>
     </button>
-    <div class="tool-hint">Long-press a photo to multi-select</div>
+    <div class="tool-hint">Saves directly to Photos · Long-press to multi-select</div>
   </div>
 
   <div class="gallery">
@@ -446,12 +445,12 @@ async function shareOrDownload(blob, filename){
 }
 
 async function downloadOne(idx){
-  showToast('Preparing download...', 'loading');
+  showToast('Saving to Photos...', 'loading');
   try {
     const p = photos[idx];
     const blob = await dataURIToBlob(p.src);
     const res = await shareOrDownload(blob, `SN2644_Plate_${p.num}.jpg`);
-    if (res.ok) showToast('✓ Saved', 'success');
+    if (res.ok) showToast('✓ Saved to Photos', 'success');
     else if (res.cancelled) hideToast();
     else showToast('Save failed — try long-press the image', 'error');
   } catch(e){
@@ -459,29 +458,61 @@ async function downloadOne(idx){
   }
 }
 
-async function downloadMultiple(indices){
+// Save multiple photos directly to Photos app via multi-file Web Share API
+async function savePhotosToGallery(indices){
   if (indices.length === 0) return;
   if (indices.length === 1){ await downloadOne(indices[0]); return; }
-  if (!window.JSZip){ showToast('ZIP library not loaded', 'error'); return; }
-  showToast(`Bundling ${indices.length} photos...`, 'loading');
+
+  showToast(`Preparing ${indices.length} photos...`, 'loading');
+
   try {
-    const zip = new JSZip();
+    // Convert all selected photos to File objects
+    const files = [];
     for (const i of indices){
       const p = photos[i];
       const blob = await dataURIToBlob(p.src);
-      zip.file(`SN2644_Plate_${p.num}.jpg`, blob);
+      files.push(new File([blob], `SN2644_Plate_${p.num}.jpg`, { type: blob.type }));
     }
-    const content = await zip.generateAsync({ type:'blob' });
-    const res = await shareOrDownload(content, 'SN2644_Naming_Ceremony.zip');
-    if (res.ok) showToast(`✓ ${indices.length} photos saved`, 'success');
-    else if (res.cancelled) hideToast();
-    else showToast('Save failed', 'error');
+
+    // Try multi-file Web Share — opens iOS/Android share sheet with "Save N Images" option
+    if (navigator.canShare && navigator.canShare({ files })){
+      try {
+        showToast(`Opening Photos share sheet...`, 'loading');
+        await navigator.share({
+          files,
+          title: 'SN2644 Naming Ceremony',
+        });
+        showToast(`✓ ${files.length} photos saved`, 'success');
+        return;
+      } catch(e){
+        if (e.name === 'AbortError'){ hideToast(); return; }
+        // fall through to sequential fallback
+      }
+    }
+
+    // Fallback (desktop / unsupported): sequential individual downloads
+    showToast(`Downloading ${files.length} photos...`, 'loading');
+    for (let k = 0; k < files.length; k++){
+      const f = files[k];
+      const url = URL.createObjectURL(f);
+      const a = document.createElement('a');
+      a.href = url; a.download = f.name;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+      // Brief delay between downloads to prevent browser blocking
+      if (k < files.length - 1) await new Promise(r => setTimeout(r, 150));
+    }
+    showToast(`✓ ${files.length} photos downloaded`, 'success');
+
   } catch(e){
     showToast('Error: ' + e.message, 'error');
   }
 }
 
-async function downloadAll(){ await downloadMultiple(photos.map((_,i)=>i)); }
+async function downloadAll(){ await savePhotosToGallery(photos.map((_,i)=>i)); }
 
 let selectionMode = false;
 const selected = new Set();
@@ -558,7 +589,7 @@ document.getElementById('btnSelCancel').addEventListener('click', exitSelection)
 document.getElementById('btnSelDownload').addEventListener('click', async () => {
   if (selected.size === 0){ showToast('Select at least one photo', 'error'); return; }
   const indices = Array.from(selected).sort((a,b)=>a-b);
-  await downloadMultiple(indices);
+  await savePhotosToGallery(indices);
   exitSelection();
 });
 
